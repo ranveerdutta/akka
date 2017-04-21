@@ -234,7 +234,7 @@ object Behavior {
       case IgnoreBehavior                   ⇒ SameBehavior.asInstanceOf[Behavior[T]]
       case StoppedBehavior                  ⇒ StoppedBehavior.asInstanceOf[Behavior[T]]
       case EmptyBehavior                    ⇒ UnhandledBehavior.asInstanceOf[Behavior[T]]
-      case ext: ExtensibleBehavior[T] @unchecked ⇒
+      case ext: ExtensibleBehavior[T] ⇒
         val possiblyDeferredResult = msg match {
           case signal: Signal ⇒ ext.receiveSignal(ctx, signal)
           case msg            ⇒ ext.receiveMessage(ctx, msg.asInstanceOf[T])
