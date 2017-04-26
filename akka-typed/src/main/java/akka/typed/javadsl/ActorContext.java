@@ -107,6 +107,14 @@ public interface ActorContext<T> {
   public <U> void watch(ActorRef<U> other);
 
   /**
+   * Register for termination notification with a custom message once the Actor identified by the
+   * given {@link akka.typed.ActorRef} terminates. This notification is also generated when the
+   * {@link akka.typed.ActorSystem} to which the referenced Actor belongs is declared as failed
+   * (e.g. in reaction to being unreachable).
+   */
+  public <U> void watchWith(ActorRef<U> other, T msg);
+
+  /**
    * Revoke the registration established by {@link #watch}. A {@link akka.typed.Terminated}
    * notification will not subsequently be received for the referenced Actor.
    */
