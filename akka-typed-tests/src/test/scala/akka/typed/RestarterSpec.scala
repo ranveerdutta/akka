@@ -56,6 +56,16 @@ class RestarterSpec extends TypedSpec {
       Same
     })
 
+  class FailingConstructor(monitor: ActorRef[Event]) extends MutableBehavior[Command] {
+    monitor ! Started
+    throw new RuntimeException("simulated exc from constructor") with NoStackTrace
+
+    override def onMessage(msg: Command): Behavior[Command] = {
+      monitor ! Pong
+      Same
+    }
+  }
+
   trait StubbedTests {
     def system: ActorSystem[TypedSpec.Command]
 
@@ -200,6 +210,17 @@ class RestarterSpec extends TypedSpec {
       }
       inbox.receiveMsg() should ===(GotSignal(PostStop))
     }
+
+    def `must create underlying deferred behavior immediately`(): Unit = {
+      val inbox = Inbox[Event]("evt")
+      val behv = Restarter[Exception]().wrap(Deferred[Command] { _ ⇒
+        inbox.ref ! Started
+        target(inbox.ref)
+      })
+      val ctx = mkCtx(behv)
+      // it's supposed to be created immediately (not waiting for first message)
+      inbox.receiveMsg() should ===(Started)
+    }
   }
 
   trait RealTests {
@@ -320,12 +341,8 @@ class RestarterSpec extends TypedSpec {
       })
       val ref = start(behv)
 
-      // FIXME is this correct? Shouldn't Deferred still be "started" before the first message? Side effect of removing PreStart?
-      // the Deferred will be "started" when receiving first message
-      startedProbe.expectNoMsg(100.millis)
-
+      startedProbe.expectMsg(Started)
       ref ! NextState
-      startedProbe.expectMsg(Started) // FIXME see above
       ref ! Throw(new Exc1)
       probe.expectMsg(GotSignal(PreRestart))
       ref ! Ping // dropped due to backoff
@@ -379,7 +396,26 @@ class RestarterSpec extends TypedSpec {
       probe.expectMsg(State(0, Map.empty))
     }
 
-    // TODO test exception from constructor
+    def `must create underlying deferred behavior immediately`(): Unit = {
+      val probe = TestProbe[Event]("evt")
+      val behv = Restarter[Exception]().wrap(Deferred[Command] { _ ⇒
+        probe.ref ! Started
+        target(probe.ref)
+      })
+      probe.expectNoMsg(100.millis) // not yet
+      start(behv)
+      // it's supposed to be created immediately (not waiting for first message)
+      probe.expectMsg(Started)
+    }
+
+    def `must stop when exception from MutableBehavior constructor`(): Unit = {
+      val probe = TestProbe[Event]("evt")
+      val behv = Restarter[Exception]().wrap(Mutable[Command](_ ⇒ new FailingConstructor(probe.ref)))
+      val ref = start(behv)
+      probe.expectMsg(Started)
+      ref ! Ping
+      probe.expectNoMsg(100.millis)
+    }
 
   }
 

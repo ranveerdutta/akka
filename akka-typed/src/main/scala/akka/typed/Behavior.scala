@@ -116,7 +116,6 @@ object Behavior {
    * INTERNAL API.
    */
   @InternalApi
-  @SerialVersionUID(1L)
   private[akka] object EmptyBehavior extends Behavior[Any] {
     override def toString = "Empty"
   }
@@ -125,7 +124,6 @@ object Behavior {
    * INTERNAL API.
    */
   @InternalApi
-  @SerialVersionUID(1L)
   private[akka] object IgnoreBehavior extends Behavior[Any] {
     override def toString = "Ignore"
   }
@@ -134,7 +132,6 @@ object Behavior {
    * INTERNAL API.
    */
   @InternalApi
-  @SerialVersionUID(1L)
   private[akka] object UnhandledBehavior extends Behavior[Nothing] {
     override def toString = "Unhandled"
   }
@@ -149,8 +146,6 @@ object Behavior {
    * INTERNAL API.
    */
   @InternalApi
-  @DoNotInherit
-  @SerialVersionUID(1L)
   private[akka] abstract class DeferredBehavior[T] extends Behavior[T] {
     /** "undefer" the deferred behavior */
     @throws(classOf[Exception])
@@ -160,7 +155,6 @@ object Behavior {
   /**
    * INTERNAL API.
    */
-  @SerialVersionUID(1L)
   private[akka] object SameBehavior extends Behavior[Nothing] {
     override def toString = "Same"
   }
@@ -168,7 +162,6 @@ object Behavior {
   /**
    * INTERNAL API.
    */
-  @SerialVersionUID(1L)
   private[akka] object StoppedBehavior extends Behavior[Nothing] {
     override def toString = "Stopped"
   }
@@ -179,18 +172,21 @@ object Behavior {
    * behavior) this method computes the next behavior, suitable for passing a
    * message or signal.
    */
+  @tailrec
   def canonicalize[T](behavior: Behavior[T], current: Behavior[T], ctx: ActorContext[T]): Behavior[T] =
     behavior match {
       case SameBehavior                  ⇒ current
       case UnhandledBehavior             ⇒ current
-      case deferred: DeferredBehavior[T] ⇒ canonicalize(undefer(deferred, ctx), deferred, ctx)
+      case deferred: DeferredBehavior[T] ⇒ canonicalize(deferred(ctx), deferred, ctx)
       case other                         ⇒ other
     }
 
   @tailrec
-  def undefer[T](behavior: Behavior[T], ctx: ActorContext[T]): Behavior[T] = behavior match {
-    case innerDeferred: DeferredBehavior[T] @unchecked ⇒ undefer(innerDeferred(ctx), ctx)
-    case _ ⇒ behavior
+  def undefer[T](behavior: Behavior[T], ctx: ActorContext[T]): Behavior[T] = {
+    behavior match {
+      case innerDeferred: DeferredBehavior[T] ⇒ undefer(innerDeferred(ctx), ctx)
+      case _                                  ⇒ behavior
+    }
   }
 
   /**
