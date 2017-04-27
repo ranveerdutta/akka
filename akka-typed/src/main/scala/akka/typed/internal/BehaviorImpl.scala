@@ -43,8 +43,8 @@ import akka.typed.scaladsl.Actor
   }
 
   class ImmutableBehavior[T](
-    onMessage: (ActorContext[T], T) ⇒ Behavior[T],
-    onSignal:  PartialFunction[(ActorContext[T], Signal), Behavior[T]] = Behavior.unhandledSignal.asInstanceOf[PartialFunction[(ActorContext[T], Signal), Behavior[T]]])
+    val onMessage: (ActorContext[T], T) ⇒ Behavior[T],
+    onSignal:      PartialFunction[(ActorContext[T], Signal), Behavior[T]] = Behavior.unhandledSignal.asInstanceOf[PartialFunction[(ActorContext[T], Signal), Behavior[T]]])
     extends ExtensibleBehavior[T] {
 
     override def receiveSignal(ctx: AC[T], msg: Signal): Behavior[T] =

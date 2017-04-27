@@ -1,18 +1,18 @@
 /**
  * Copyright (C) 2017 Lightbend Inc. <http://www.lightbend.com>
  */
-package akka.typed.scaladsl
+package akka.typed.javadsl
 
-import scala.concurrent.ExecutionContextExecutor
-import scala.concurrent.duration.FiniteDuration
-
-import akka.annotation.ApiMayChange
+import java.util.function.{ Function ⇒ JFunction }
 import akka.annotation.DoNotInherit
+import akka.annotation.ApiMayChange
 import akka.typed.ActorRef
 import akka.typed.ActorSystem
+import java.util.Optional
 import akka.typed.Behavior
 import akka.typed.DeploymentConfig
-import akka.typed.EmptyDeploymentConfig
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.ExecutionContextExecutor
 
 /**
  * An Actor is given by the combination of a [[Behavior]] and a context in
@@ -23,57 +23,69 @@ import akka.typed.EmptyDeploymentConfig
  *  - create a finite number of Actors
  *  - designate the behavior for the next message
  *
- * In Akka the first capability is accessed by using the `!` or `tell` method
+ * In Akka the first capability is accessed by using the `tell` method
  * on an [[ActorRef]], the second is provided by [[ActorContext#spawn]]
  * and the third is implicit in the signature of [[Behavior]] in that the next
  * behavior is always returned from the message processing logic.
  *
- * An `ActorContext` in addition provides access to the Actor’s own identity (“`self`”),
+ * An `ActorContext` in addition provides access to the Actor’s own identity (“`getSelf`”),
  * the [[ActorSystem]] it is part of, methods for querying the list of child Actors it
  * created, access to [[Terminated DeathWatch]] and timed message scheduling.
  */
 @DoNotInherit
 @ApiMayChange
-trait ActorContext[T] { this: akka.typed.javadsl.ActorContext[T] ⇒
+trait ActorContext[T] {
+  // this must be a pure interface, i.e. only abstract methods
 
   /**
    * The identity of this Actor, bound to the lifecycle of this Actor instance.
    * An Actor with the same name that lives before or after this instance will
    * have a different [[ActorRef]].
    */
-  def self: ActorRef[T]
+  def getSelf: ActorRef[T]
 
   /**
    * Return the mailbox capacity that was configured by the parent for this actor.
    */
-  def mailboxCapacity: Int
+  def getMailboxCapacity: Int
 
   /**
    * The [[ActorSystem]] to which this Actor belongs.
    */
-  def system: ActorSystem[Nothing]
+  def getSystem: ActorSystem[Void]
 
   /**
    * The list of child Actors created by this Actor during its lifetime that
    * are still alive, in no particular order.
    */
-  def children: Iterable[ActorRef[Nothing]]
+  def getChildren: java.util.List[ActorRef[Void]]
 
   /**
    * The named child Actor if it is alive.
    */
-  def child(name: String): Option[ActorRef[Nothing]]
+  def getChild(name: String): Optional[ActorRef[Void]]
 
   /**
    * Create a child Actor from the given [[akka.typed.Behavior]] under a randomly chosen name.
    * It is good practice to name Actors wherever practical.
    */
-  def spawnAnonymous[U](behavior: Behavior[U], deployment: DeploymentConfig = EmptyDeploymentConfig): ActorRef[U]
+  def spawnAnonymous[U](behavior: Behavior[U]): ActorRef[U]
+
+  /**
+   * Create a child Actor from the given [[akka.typed.Behavior]] under a randomly chosen name.
+   * It is good practice to name Actors wherever practical.
+   */
+  def spawnAnonymous[U](behavior: Behavior[U], deployment: DeploymentConfig): ActorRef[U]
 
   /**
    * Create a child Actor from the given [[akka.typed.Behavior]] and with the given name.
    */
-  def spawn[U](behavior: Behavior[U], name: String, deployment: DeploymentConfig = EmptyDeploymentConfig): ActorRef[U]
+  def spawn[U](behavior: Behavior[U], name: String): ActorRef[U]
+
+  /**
+   * Create a child Actor from the given [[akka.typed.Behavior]] and with the given name.
+   */
+  def spawn[U](behavior: Behavior[U], name: String, deployment: DeploymentConfig): ActorRef[U]
 
   /**
    * Force the child Actor under the given name to terminate after it finishes
@@ -123,7 +135,7 @@ trait ActorContext[T] { this: akka.typed.javadsl.ActorContext[T] ⇒
    * This Actor’s execution context. It can be used to run asynchronous tasks
    * like [[scala.concurrent.Future]] combinators.
    */
-  implicit def executionContext: ExecutionContextExecutor
+  def getExecutionContext: ExecutionContextExecutor
 
   /**
    * Create a child actor that will wrap messages such that other Actor’s
@@ -136,13 +148,13 @@ trait ActorContext[T] { this: akka.typed.javadsl.ActorContext[T] ⇒
    * the given `name` argument does not need to be unique within the scope
    * of the parent actor.
    */
-  def spawnAdapter[U](f: U ⇒ T, name: String): ActorRef[U]
+  def createAdapter[U](f: JFunction[U, T], name: String): ActorRef[U]
 
   /**
    * Create an anonymous child actor that will wrap messages such that other Actor’s
    * protocols can be ingested by this Actor. You are strongly advised to cache
    * these ActorRefs or to stop them when no longer needed.
    */
-  def spawnAdapter[U](f: U ⇒ T): ActorRef[U] = spawnAdapter(f, "")
+  def createAdapter[U](f: JFunction[U, T]): ActorRef[U]
 
 }
