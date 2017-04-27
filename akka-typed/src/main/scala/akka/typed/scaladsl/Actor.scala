@@ -4,151 +4,18 @@
 package akka.typed
 package scaladsl
 
-import akka.util.LineNumbers
 import scala.reflect.ClassTag
-import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.ExecutionContextExecutor
-import scala.deprecatedInheritance
-import akka.typed.{ ActorContext ⇒ AC }
+
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
-
-/**
- * An Actor is given by the combination of a [[Behavior]] and a context in
- * which this behavior is executed. As per the Actor Model an Actor can perform
- * the following actions when processing a message:
- *
- *  - send a finite number of messages to other Actors it knows
- *  - create a finite number of Actors
- *  - designate the behavior for the next message
- *
- * In Akka the first capability is accessed by using the `!` or `tell` method
- * on an [[ActorRef]], the second is provided by [[ActorContext#spawn]]
- * and the third is implicit in the signature of [[Behavior]] in that the next
- * behavior is always returned from the message processing logic.
- *
- * An `ActorContext` in addition provides access to the Actor’s own identity (“`self`”),
- * the [[ActorSystem]] it is part of, methods for querying the list of child Actors it
- * created, access to [[Terminated DeathWatch]] and timed message scheduling.
- */
-@DoNotInherit
-@ApiMayChange
-trait ActorContext[T] { this: akka.typed.javadsl.ActorContext[T] ⇒
-
-  /**
-   * The identity of this Actor, bound to the lifecycle of this Actor instance.
-   * An Actor with the same name that lives before or after this instance will
-   * have a different [[ActorRef]].
-   */
-  def self: ActorRef[T]
-
-  /**
-   * Return the mailbox capacity that was configured by the parent for this actor.
-   */
-  def mailboxCapacity: Int
-
-  /**
-   * The [[ActorSystem]] to which this Actor belongs.
-   */
-  def system: ActorSystem[Nothing]
-
-  /**
-   * The list of child Actors created by this Actor during its lifetime that
-   * are still alive, in no particular order.
-   */
-  def children: Iterable[ActorRef[Nothing]]
-
-  /**
-   * The named child Actor if it is alive.
-   */
-  def child(name: String): Option[ActorRef[Nothing]]
-
-  /**
-   * Create a child Actor from the given [[akka.typed.Behavior]] under a randomly chosen name.
-   * It is good practice to name Actors wherever practical.
-   */
-  def spawnAnonymous[U](behavior: Behavior[U], deployment: DeploymentConfig = EmptyDeploymentConfig): ActorRef[U]
-
-  /**
-   * Create a child Actor from the given [[akka.typed.Behavior]] and with the given name.
-   */
-  def spawn[U](behavior: Behavior[U], name: String, deployment: DeploymentConfig = EmptyDeploymentConfig): ActorRef[U]
-
-  /**
-   * Force the child Actor under the given name to terminate after it finishes
-   * processing its current message. Nothing happens if the ActorRef does not
-   * refer to a current child actor.
-   *
-   * @return whether the passed-in [[ActorRef]] points to a current child Actor
-   */
-  def stop(child: ActorRef[_]): Boolean
-
-  /**
-   * Register for [[Terminated]] notification once the Actor identified by the
-   * given [[ActorRef]] terminates. This notification is also generated when the
-   * [[ActorSystem]] to which the referenced Actor belongs is declared as
-   * failed (e.g. in reaction to being unreachable).
-   */
-  def watch[U](other: ActorRef[U]): Unit
-
-  /**
-   * Revoke the registration established by `watch`. A [[Terminated]]
-   * notification will not subsequently be received for the referenced Actor.
-   */
-  def unwatch[U](other: ActorRef[U]): Unit
-
-  /**
-   * Schedule the sending of a notification in case no other
-   * message is received during the given period of time. The timeout starts anew
-   * with each received message. Provide `Duration.Undefined` to switch off this
-   * mechanism.
-   */
-  def setReceiveTimeout(d: FiniteDuration, msg: T): Unit
-
-  /**
-   * Cancel the sending of receive timeout notifications.
-   */
-  def cancelReceiveTimeout(): Unit
-
-  /**
-   * Schedule the sending of the given message to the given target Actor after
-   * the given time period has elapsed. The scheduled action can be cancelled
-   * by invoking [[akka.actor.Cancellable#cancel]] on the returned
-   * handle.
-   */
-  def schedule[U](delay: FiniteDuration, target: ActorRef[U], msg: U): akka.actor.Cancellable
-
-  /**
-   * This Actor’s execution context. It can be used to run asynchronous tasks
-   * like [[scala.concurrent.Future]] combinators.
-   */
-  implicit def executionContext: ExecutionContextExecutor
-
-  /**
-   * Create a child actor that will wrap messages such that other Actor’s
-   * protocols can be ingested by this Actor. You are strongly advised to cache
-   * these ActorRefs or to stop them when no longer needed.
-   *
-   * The name of the child actor will be composed of a unique identifier
-   * starting with a dollar sign to which the given `name` argument is
-   * appended, with an inserted hyphen between these two parts. Therefore
-   * the given `name` argument does not need to be unique within the scope
-   * of the parent actor.
-   */
-  def spawnAdapter[U](f: U ⇒ T, name: String): ActorRef[U]
-
-  /**
-   * Create an anonymous child actor that will wrap messages such that other Actor’s
-   * protocols can be ingested by this Actor. You are strongly advised to cache
-   * these ActorRefs or to stop them when no longer needed.
-   */
-  def spawnAdapter[U](f: U ⇒ T): ActorRef[U] = spawnAdapter(f, "")
-
-}
+import akka.typed.internal.BehaviorImpl
 
 @ApiMayChange
 object Actor {
   import Behavior._
+
+  private val _unitFunction = (_: ActorContext[Any], _: Any) ⇒ ()
+  private def unitFunction[T] = _unitFunction.asInstanceOf[((ActorContext[T], Signal) ⇒ Unit)]
 
   final implicit class BehaviorDecorators[T](val behavior: Behavior[T]) extends AnyVal {
     /**
@@ -157,62 +24,25 @@ object Actor {
      * at) and may transform the incoming message to place them into the wrapped
      * Behavior’s type hierarchy. Signals are not transformed.
      *
-     * see also [[Actor.Widened]]
+     * Example:
+     * {{{
+     * Immutable[String] { (ctx, msg) => println(msg); Same }.widen[Number] {
+     *   case b: BigDecimal => s"BigDecimal(&dollar;b)"
+     *   case i: BigInteger => s"BigInteger(&dollar;i)"
+     *   // drop all other kinds of Number
+     * }
+     * }}}
      */
-    def widen[U](matcher: PartialFunction[U, T]): Behavior[U] = Widened(behavior, matcher)
-  }
-
-  private val _nullFun = (_: Any) ⇒ null
-  private def nullFun[T] = _nullFun.asInstanceOf[Any ⇒ T]
-  private implicit class ContextAs[T](val ctx: AC[T]) extends AnyVal {
-    def as[U] = ctx.asInstanceOf[AC[U]]
-  }
-
-  /**
-   * Widen the wrapped Behavior by placing a funnel in front of it: the supplied
-   * PartialFunction decides which message to pull in (those that it is defined
-   * at) and may transform the incoming message to place them into the wrapped
-   * Behavior’s type hierarchy. Signals are not transformed.
-   *
-   * Example:
-   * {{{
-   * Immutable[String] { (ctx, msg) => println(msg); Same }.widen[Number] {
-   *   case b: BigDecimal => s"BigDecimal(&dollar;b)"
-   *   case i: BigInteger => s"BigInteger(&dollar;i)"
-   *   // drop all other kinds of Number
-   * }
-   * }}}
-   */
-  final case class Widened[T, U](behavior: Behavior[T], matcher: PartialFunction[U, T]) extends ExtensibleBehavior[U] {
-    private def postProcess(behv: Behavior[T], ctx: AC[T]): Behavior[U] =
-      if (isUnhandled(behv)) Unhandled
-      else if (isAlive(behv)) {
-        val next = canonicalize(behv, behavior, ctx)
-        if (next eq behavior) Same else Widened(next, matcher)
-      } else Stopped
-
-    override def receiveSignal(ctx: AC[U], signal: Signal): Behavior[U] =
-      postProcess(Behavior.interpretSignal(behavior, ctx.as[T], signal), ctx.as[T])
-
-    override def receiveMessage(ctx: AC[U], msg: U): Behavior[U] =
-      matcher.applyOrElse(msg, nullFun) match {
-        case null        ⇒ Unhandled
-        case transformed ⇒ postProcess(Behavior.interpretMessage(behavior, ctx.as[T], transformed), ctx.as[T])
-      }
-
-    override def toString: String = s"${behavior.toString}.widen(${LineNumbers(matcher)})"
+    def widen[U](matcher: PartialFunction[U, T]): Behavior[U] =
+      BehaviorImpl.Widened(behavior, matcher)
   }
 
   /**
    * Wrap a behavior factory so that it runs upon PreStart, i.e. behavior creation
    * is deferred to the child actor instead of running within the parent.
    */
-  final case class Deferred[T](factory: ActorContext[T] ⇒ Behavior[T]) extends DeferredBehavior[T] {
-    /** "undefer" the deferred behavior */
-    override def apply(ctx: AC[T]): Behavior[T] = factory(ctx)
-
-    override def toString: String = s"Deferred(${LineNumbers(factory)})"
-  }
+  def Deferred[T](factory: ActorContext[T] ⇒ Behavior[T]): Behavior[T] =
+    Behavior.DeferredBehavior(factory)
 
   /**
    * Factory for creating a [[MutableBehavior]] that typically holds mutable state as
@@ -329,21 +159,14 @@ object Actor {
    * State is updated by returning a new behavior that holds the new immutable
    * state.
    */
-  final class Immutable[T] private (
-    onMessage: (ActorContext[T], T) ⇒ Behavior[T],
-    onSignal:  PartialFunction[(ActorContext[T], Signal), Behavior[T]] = Behavior.unhandledSignal.asInstanceOf[PartialFunction[(ActorContext[T], Signal), Behavior[T]]])
-    extends ExtensibleBehavior[T] {
-    override def receiveSignal(ctx: AC[T], msg: Signal): Behavior[T] = onSignal(ctx, msg)
-    override def receiveMessage(ctx: AC[T], msg: T) = onMessage(ctx, msg)
-    override def toString = s"Immutable(${LineNumbers(onMessage)})"
+  def Immutable[T](onMessage: (ActorContext[T], T) ⇒ Behavior[T]): Immutable[T] =
+    new Immutable(onMessage)
 
-    def onSignal(onSignal: PartialFunction[(ActorContext[T], Signal), Behavior[T]]): Immutable[T] =
-      new Immutable(onMessage, onSignal)
-  }
+  final class Immutable[T](onMessage: (ActorContext[T], T) ⇒ Behavior[T])
+    extends BehaviorImpl.ImmutableBehavior[T](onMessage) {
 
-  object Immutable {
-    def apply[T](onMessage: (ActorContext[T], T) ⇒ Behavior[T]) =
-      new Immutable(onMessage)
+    def onSignal(onSignal: PartialFunction[(ActorContext[T], Signal), Behavior[T]]): Behavior[T] =
+      new BehaviorImpl.ImmutableBehavior(onMessage, onSignal)
   }
 
   /**
@@ -351,26 +174,11 @@ object Actor {
    * some action upon each received message or signal. It is most commonly used
    * for logging or tracing what a certain Actor does.
    */
-  final case class Tap[T](
+  def Tap[T](
     onMessage: Function2[ActorContext[T], T, _],
     onSignal:  Function2[ActorContext[T], Signal, _],
-    behavior:  Behavior[T]) extends ExtensibleBehavior[T] {
-
-    private def canonical(behv: Behavior[T]): Behavior[T] =
-      if (isUnhandled(behv)) Unhandled
-      else if ((behv eq SameBehavior) || (behv eq this)) Same
-      else if (isAlive(behv)) Tap(onMessage, onSignal, behv)
-      else Stopped
-    override def receiveSignal(ctx: AC[T], signal: Signal): Behavior[T] = {
-      onSignal(ctx, signal)
-      canonical(Behavior.interpretSignal(behavior, ctx, signal))
-    }
-    override def receiveMessage(ctx: AC[T], msg: T): Behavior[T] = {
-      onMessage(ctx, msg)
-      canonical(Behavior.interpretMessage(behavior, ctx, msg))
-    }
-    override def toString = s"Tap(${LineNumbers(onSignal)},${LineNumbers(onMessage)},$behavior)"
-  }
+    behavior:  Behavior[T]): Behavior[T] =
+    BehaviorImpl.Tap(onMessage, onSignal, behavior)
 
   /**
    * Behavior decorator that copies all received message to the designated
@@ -378,9 +186,8 @@ object Actor {
    * wrapped behavior can evolve (i.e. return different behavior) without needing to be
    * wrapped in a `monitor` call again.
    */
-  object Monitor {
-    def apply[T](monitor: ActorRef[T], behavior: Behavior[T]): Tap[T] = Tap((_, msg) ⇒ monitor ! msg, unitFunction, behavior)
-  }
+  def Monitor[T](monitor: ActorRef[T], behavior: Behavior[T]): Behavior[T] =
+    Tap((_, msg) ⇒ monitor ! msg, unitFunction, behavior)
 
   /**
    * Wrap the given behavior such that it is restarted (i.e. reset to its
@@ -397,34 +204,14 @@ object Actor {
    * val dbRestarts = Restarter[DbException]().wrap(dbConnector)
    * }}}
    */
-  object Restarter {
-    class Apply[Thr <: Throwable](c: ClassTag[Thr], strategy: SupervisorStrategy) {
-      def wrap[T](b: Behavior[T]): Behavior[T] = akka.typed.internal.Restarter(Behavior.validateAsInitial(b), strategy)(c)
-    }
+  def Restarter[Thr <: Throwable: ClassTag](strategy: SupervisorStrategy = SupervisorStrategy.restart): Restarter[Thr] =
+    new Restarter(implicitly, strategy)
 
-    def apply[Thr <: Throwable: ClassTag](strategy: SupervisorStrategy = SupervisorStrategy.restart): Apply[Thr] =
-      new Apply(implicitly, strategy)
+  final class Restarter[Thr <: Throwable: ClassTag](c: ClassTag[Thr], strategy: SupervisorStrategy) {
+    def wrap[T](b: Behavior[T]): Behavior[T] = akka.typed.internal.Restarter(Behavior.validateAsInitial(b), strategy)(c)
   }
 
   // TODO
   // final case class Selective[T](timeout: FiniteDuration, selector: PartialFunction[T, Behavior[T]], onTimeout: () ⇒ Behavior[T])
-
-  /**
-   * INTERNAL API.
-   */
-  private[akka] val _unhandledFunction = (_: Any) ⇒ Unhandled[Nothing]
-  /**
-   * INTERNAL API.
-   */
-  private[akka] def unhandledFunction[T, U] = _unhandledFunction.asInstanceOf[(T ⇒ Behavior[U])]
-
-  /**
-   * INTERNAL API.
-   */
-  private[akka] val _unitFunction = (_: ActorContext[Any], _: Any) ⇒ ()
-  /**
-   * INTERNAL API.
-   */
-  private[akka] def unitFunction[T] = _unitFunction.asInstanceOf[((ActorContext[T], Signal) ⇒ Unit)]
 
 }

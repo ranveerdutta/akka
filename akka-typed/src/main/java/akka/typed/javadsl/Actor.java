@@ -16,7 +16,7 @@ import akka.japi.function.Procedure2;
 import akka.japi.pf.PFBuilder;
 import akka.typed.*;
 import akka.typed.internal.Restarter;
-import akka.typed.scaladsl.Actor.Widened;
+import akka.typed.internal.BehaviorImpl.Widened;
 import scala.reflect.ClassTag;
 
 public abstract class Actor {
@@ -27,18 +27,6 @@ public abstract class Actor {
 	 * same runtime performance (especially concerning allocations for function converters).
 	 */
 
-  private static class Deferred<T> extends Behavior.DeferredBehavior<T> {
-    final akka.japi.function.Function<ActorContext<T>, Behavior<T>> producer;
-
-    public Deferred(akka.japi.function.Function<ActorContext<T>, Behavior<T>> producer) {
-      this.producer = producer;
-    }
-
-    @Override
-    public Behavior<T> apply(akka.typed.ActorContext<T> ctx) throws Exception {
-      return producer.apply(ctx);
-    }
-  }
 
   private static class Immutable<T> extends ExtensibleBehavior<T> {
     final Function2<ActorContext<T>, T, Behavior<T>> message;
@@ -177,7 +165,7 @@ public abstract class Actor {
    * to reuse the previous behavior, including the hint that the message has not
    * been handled. This hint may be used by composite behaviors that delegate
    * (partial) handling to other behaviors.
-   * 
+   *
    * @return pseudo-behavior marking “unhandled”
    */
   static public <T> Behavior<T> unhandled() {
@@ -316,7 +304,7 @@ public abstract class Actor {
    * @return the deferred behavior
    */
   static public <T> Behavior<T> deferred(akka.japi.function.Function<ActorContext<T>, Behavior<T>> producer) {
-    return new Deferred<T>(producer);
+    return null; //FIXME new DeferredBehavior<T>(producer);
   }
 
   /**
