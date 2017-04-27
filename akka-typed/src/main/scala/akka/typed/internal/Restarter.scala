@@ -108,7 +108,7 @@ import akka.typed.scaladsl.Actor
 
   protected def log(ctx: ActorContext[T], ex: Thr): Unit = {
     if (loggingEnabled)
-      ctx.system.eventStream.publish(Logging.Error(ex, ctx.self.toString, behavior.getClass, ex.getMessage))
+      ctx.asScala.system.eventStream.publish(Logging.Error(ex, ctx.asScala.self.toString, behavior.getClass, ex.getMessage))
   }
 }
 
@@ -224,7 +224,7 @@ import akka.typed.scaladsl.Actor
 
   override def receiveSignal(ctx: ActorContext[Any], signal: Signal): Behavior[Any] = {
     if (blackhole) {
-      ctx.system.eventStream.publish(Dropped(signal, ctx.self))
+      ctx.asScala.system.eventStream.publish(Dropped(signal, ctx.asScala.self))
       Behavior.same
     } else
       super.receiveSignal(ctx, signal)
@@ -236,7 +236,7 @@ import akka.typed.scaladsl.Actor
       case ScheduledRestart ⇒
         // actual restart after scheduled backoff delay
         val restartedBehavior = Restarter.initialUndefer(ctx, initialBehavior)
-        ctx.schedule(strategy.resetBackoffAfter, ctx.self, ResetRestartCount(restartCount))
+        ctx.asScala.schedule(strategy.resetBackoffAfter, ctx.asScala.self, ResetRestartCount(restartCount))
         new BackoffRestarter[T, Thr](initialBehavior, restartedBehavior, strategy, restartCount, blackhole = false)
       case ResetRestartCount(current) ⇒
         if (current == restartCount)
@@ -245,7 +245,7 @@ import akka.typed.scaladsl.Actor
           Behavior.same
       case _ ⇒
         if (blackhole) {
-          ctx.system.eventStream.publish(Dropped(msg, ctx.self))
+          ctx.asScala.system.eventStream.publish(Dropped(msg, ctx.asScala.self))
           Behavior.same
         } else
           super.receiveMessage(ctx, msg)
@@ -258,7 +258,7 @@ import akka.typed.scaladsl.Actor
       // actual restart happens after the scheduled backoff delay
       try Behavior.interpretSignal(behavior, ctx, PreRestart) catch { case NonFatal(_) ⇒ }
       val restartDelay = calculateDelay(restartCount, strategy.minBackoff, strategy.maxBackoff, strategy.randomFactor)
-      ctx.schedule(restartDelay, ctx.self, ScheduledRestart)
+      ctx.asScala.schedule(restartDelay, ctx.asScala.self, ScheduledRestart)
       new BackoffRestarter[T, Thr](initialBehavior, startedBehavior, strategy, restartCount + 1, blackhole = true)
   }
 
