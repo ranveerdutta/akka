@@ -82,9 +82,9 @@ import akka.typed.scaladsl.Actor
 
   @tailrec
   protected final def canonical(b: Behavior[T], ctx: ActorContext[T], afterException: Boolean): Behavior[T] =
-    if (Behavior.isUnhandled(b)) Unhandled
-    else if ((b eq Behavior.SameBehavior) || (b eq behavior)) Same
-    else if (!Behavior.isAlive(b)) Stopped
+    if (Behavior.isUnhandled(b)) Behavior.unhandled
+    else if ((b eq Behavior.SameBehavior) || (b eq behavior)) Behavior.same
+    else if (!Behavior.isAlive(b)) Behavior.stopped
     else {
       b match {
         case d: DeferredBehavior[T] ⇒ canonical(Behavior.undefer(d, ctx), ctx, afterException)
@@ -92,14 +92,14 @@ import akka.typed.scaladsl.Actor
       }
     }
 
-  override def management(ctx: ActorContext[T], signal: Signal): Behavior[T] = {
+  override def receiveSignal(ctx: ActorContext[T], signal: Signal): Behavior[T] = {
     try {
       val b = Behavior.interpretSignal(behavior, ctx, signal)
       canonical(b, ctx, afterException = false)
     } catch handleException(ctx, behavior)
   }
 
-  override def message(ctx: ActorContext[T], msg: T): Behavior[T] = {
+  override def receiveMessage(ctx: ActorContext[T], msg: T): Behavior[T] = {
     try {
       val b = Behavior.interpretMessage(behavior, ctx, msg)
       canonical(b, ctx, afterException = false)
@@ -222,15 +222,15 @@ import akka.typed.scaladsl.Actor
 
   override def loggingEnabled: Boolean = strategy.loggingEnabled
 
-  override def management(ctx: ActorContext[Any], signal: Signal): Behavior[Any] = {
+  override def receiveSignal(ctx: ActorContext[Any], signal: Signal): Behavior[Any] = {
     if (blackhole) {
       ctx.system.eventStream.publish(Dropped(signal, ctx.self))
-      Same
+      Behavior.same
     } else
-      super.management(ctx, signal)
+      super.receiveSignal(ctx, signal)
   }
 
-  override def message(ctx: ActorContext[Any], msg: Any): Behavior[Any] = {
+  override def receiveMessage(ctx: ActorContext[Any], msg: Any): Behavior[Any] = {
     // intercept the scheduled messages and drop incoming messages if we are in backoff mode
     msg match {
       case ScheduledRestart ⇒
@@ -242,13 +242,13 @@ import akka.typed.scaladsl.Actor
         if (current == restartCount)
           new BackoffRestarter[T, Thr](initialBehavior, behavior, strategy, restartCount = 0, blackhole)
         else
-          Same
+          Behavior.same
       case _ ⇒
         if (blackhole) {
           ctx.system.eventStream.publish(Dropped(msg, ctx.self))
-          Same
+          Behavior.same
         } else
-          super.message(ctx, msg)
+          super.receiveMessage(ctx, msg)
     }
   }
 
