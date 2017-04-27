@@ -33,8 +33,7 @@ class RestarterSpec extends TypedSpec {
   class Exc3(msg: String = "exc-3") extends RuntimeException(msg) with NoStackTrace
 
   def target(monitor: ActorRef[Event], state: State = State(0, Map.empty)): Behavior[Command] =
-    Immutable(
-      onMessage = (ctx, cmd) ⇒
+    Immutable[Command] { (ctx, cmd) ⇒
       cmd match {
         case Ping ⇒
           monitor ! Pong
@@ -50,11 +49,12 @@ class RestarterSpec extends TypedSpec {
           Same
         case Throw(e) ⇒
           throw e
-      },
-      onSignal = (ctx, sig) ⇒ {
-      monitor ! GotSignal(sig)
-      Same
-    })
+      }
+    }.onSignal {
+      case (ctx, sig) ⇒
+        monitor ! GotSignal(sig)
+        Same
+    }
 
   class FailingConstructor(monitor: ActorRef[Event]) extends MutableBehavior[Command] {
     monitor ! Started
