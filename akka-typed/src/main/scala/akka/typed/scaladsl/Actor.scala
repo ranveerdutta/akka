@@ -9,6 +9,7 @@ import scala.reflect.ClassTag
 import akka.annotation.ApiMayChange
 import akka.annotation.DoNotInherit
 import akka.typed.internal.BehaviorImpl
+import akka.typed.internal.TimerSchedulerImpl
 
 @ApiMayChange
 object Actor {
@@ -176,7 +177,7 @@ object Actor {
    */
   def Tap[T](
     onMessage: Function2[ActorContext[T], T, _],
-    onSignal:  Function2[ActorContext[T], Signal, _],
+    onSignal:  Function2[ActorContext[T], Signal, _], // FIXME use partial function here also?
     behavior:  Behavior[T]): Behavior[T] =
     BehaviorImpl.Tap(onMessage, onSignal, behavior)
 
@@ -209,6 +210,20 @@ object Actor {
 
   final class Restarter[Thr <: Throwable: ClassTag](c: ClassTag[Thr], strategy: SupervisorStrategy) {
     def wrap[T](b: Behavior[T]): Behavior[T] = akka.typed.internal.Restarter(Behavior.validateAsInitial(b), strategy)(c)
+  }
+
+  // FIXME docs
+  def timerScheduler[T](factory: TimerScheduler[T] ⇒ Behavior[T]): Behavior[T] = {
+    Deferred[T] { ctx ⇒
+      val timers = new TimerSchedulerImpl[T](ctx)
+      // Tap some signals to cancel timers wehn when restarting and stopping
+      Tap((_, _) ⇒ (), (_, sig) ⇒
+        sig match {
+          case PreRestart | PostStop ⇒ timers.cancelAll()
+          case _                     ⇒ // unhandled
+        },
+        factory(timers))
+    }
   }
 
   // TODO
