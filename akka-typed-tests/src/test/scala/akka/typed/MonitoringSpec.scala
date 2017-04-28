@@ -1,6 +1,6 @@
 /**
-  * Copyright (C) 2017 Lightbend Inc. <http://www.lightbend.com>
-  */
+ * Copyright (C) 2017 Lightbend Inc. <http://www.lightbend.com>
+ */
 package akka.typed
 
 import scala.concurrent._
@@ -20,24 +20,24 @@ class MonitoringSpec extends TypedSpec {
       case class StartWatching(watchee: ActorRef[_])
 
       val terminator = Await.result(system ? TypedSpec.Create(Immutable[Stop.type] {
-        case (ctx, `Stop`) => Stopped
-      }, "t"), 3.seconds/*.dilated*/)
+        case (ctx, `Stop`) ⇒ Stopped
+      }, "t"), 3.seconds /*.dilated*/ )
 
       val receivedTerminationSignal: Promise[Unit] = Promise()
 
       val watcher = Await.result(system ? TypedSpec.Create(Immutable[StartWatching](
         onMessage = {
-          case (ctx, StartWatching(watchee)) => ctx.watch(watchee); Same
-        },
+        case (ctx, StartWatching(watchee)) ⇒ ctx.watch(watchee); Same
+      },
         onSignal = {
-          case (ctx, Terminated(_)) => receivedTerminationSignal.success(()); Stopped
-        }
-      ), "w"), 3.seconds/*.dilated*/)
+        case (ctx, Terminated(_)) ⇒ receivedTerminationSignal.success(()); Stopped
+      }
+      ), "w"), 3.seconds /*.dilated*/ )
 
       watcher ! StartWatching(terminator)
       terminator ! Stop
 
-      Await.result(receivedTerminationSignal.future, 3.seconds/*.dilated*/)
+      Await.result(receivedTerminationSignal.future, 3.seconds /*.dilated*/ )
     }
 
     def `get notified of actor termination with a custom message`(): Unit = {
@@ -48,20 +48,21 @@ class MonitoringSpec extends TypedSpec {
       case class StartWatchingWith(watchee: ActorRef[_], msg: CustomTerminationMessage.type) extends Message
 
       val terminator = Await.result(system ? TypedSpec.Create(Immutable[Stop.type] {
-        case (ctx, `Stop`) => Stopped
-      }, "t"), 3.seconds/*.dilated*/)
+        case (ctx, `Stop`) ⇒ Stopped
+      }, "t"), 3.seconds /*.dilated*/ )
 
       val receivedTerminationSignal: Promise[Unit] = Promise()
 
       val watcher = Await.result(system ? TypedSpec.Create(Immutable[Message] {
-          case (ctx, StartWatchingWith(watchee, msg)) => ctx.watchWith(watchee, msg); Same
-          case (ctx, `CustomTerminationMessage`) => receivedTerminationSignal.success(()); Stopped
-        }, "w"), 3.seconds/*.dilated*/)
+        case (ctx, StartWatchingWith(watchee, msg)) ⇒
+          ctx.watchWith(watchee, msg); Same
+        case (ctx, `CustomTerminationMessage`)      ⇒ receivedTerminationSignal.success(()); Stopped
+      }, "w"), 3.seconds /*.dilated*/ )
 
       watcher ! StartWatchingWith(terminator, CustomTerminationMessage)
       terminator ! Stop
 
-      Await.result(receivedTerminationSignal.future, 3.seconds/*.dilated*/)
+      Await.result(receivedTerminationSignal.future, 3.seconds /*.dilated*/ )
     }
   }
 

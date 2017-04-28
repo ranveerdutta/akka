@@ -63,8 +63,8 @@ private[akka] trait DeathWatch { this: ActorCell ⇒
    */
   protected def watchedActorTerminated(actor: ActorRef, existenceConfirmed: Boolean, addressTerminated: Boolean): Unit = {
     watchingGet(actor) match {
-      case None => // Should not happen, but can be safely ignored.
-      case Some(optionalMessage) =>
+      case None ⇒ // Should not happen, but can be safely ignored.
+      case Some(optionalMessage) ⇒
         maintainAddressTerminatedSubscription(actor) {
           watching = removeFromMap(actor, watching)
         }

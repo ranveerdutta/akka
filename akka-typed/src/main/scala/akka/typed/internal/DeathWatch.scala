@@ -81,7 +81,7 @@ private[typed] trait DeathWatch[T] {
   protected def watchedActorTerminated(actor: ARImpl, failure: Throwable): Boolean = {
     removeChild(actor)
     watching.get(actor) match {
-      case None => // Should not happen, but can be safely ignored.
+      case None ⇒ // Should not happen, but can be safely ignored.
       case Some(optionalMessage) ⇒
         maintainAddressTerminatedSubscription(actor) {
           watching -= actor
